@@ -9,6 +9,8 @@ urlpatterns = [
     path('api/auth/', include('usuarios.urls')),
     # Vehículos del conductor autenticado (el administrador ve todos)
     path('api/', include('vehiculos.urls')),
+    # Accesos: QR del conductor, portería (entrada, salida, invitados) e historial
+    path('api/', include('accesos.urls')),
     # Documentación OpenAPI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

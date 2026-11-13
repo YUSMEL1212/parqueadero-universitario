@@ -31,6 +31,9 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
+# Llave AES-256 del token QR (32 bytes en base64). La valida accesos/qr.py al usarla.
+QR_SECRET_KEY = config('QR_SECRET_KEY', default='')
+
 
 # Application definition
 
