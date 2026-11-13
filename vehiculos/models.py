@@ -88,3 +88,11 @@ class Vehiculo(models.Model):
     def save(self, *args, **kwargs):
         self.placa = normalizar_placa(self.placa)
         super().save(*args, **kwargs)
+
+    def tiene_ticket_abierto(self):
+        """True si el vehículo está adentro: tiene un ticket con hora_salida nula.
+
+        Lo usan el ingreso (regla de un solo vehículo adentro por usuario) y el
+        borrado de vehículos.
+        """
+        return self.tickets.filter(hora_salida__isnull=True).exists()
