@@ -34,10 +34,19 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv(
 # Llave AES-256 del token QR (32 bytes en base64). La valida accesos/qr.py al usarla.
 QR_SECRET_KEY = config('QR_SECRET_KEY', default='')
 
+# Llave compartida de los sensores y de la cámara LPR (cabecera X-Device-Key).
+# Vacía = se rechazan todos los mensajes de dispositivos.
+IOT_DEVICE_KEY = config('IOT_DEVICE_KEY', default='')
+
+# Confianza mínima (0 a 1) para aceptar una lectura de placa de la cámara LPR.
+LPR_CONFIANZA_MINIMA = config('LPR_CONFIANZA_MINIMA', default=0.80, cast=float)
+
 
 # Application definition
 
 INSTALLED_APPS = [
+    # daphne va primero: reemplaza `runserver` por uno ASGI que también sirve WebSocket.
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -181,10 +190,23 @@ SPECTACULAR_SETTINGS = {
 }
 
 
-# Django Channels (capa en memoria para desarrollo)
+# Django Channels
+# Sin REDIS_URL se usa la capa en memoria (desarrollo y pruebas: un solo proceso).
+# En producción, con varios procesos o servidores, define REDIS_URL
+# (ej. redis://:password@host:6379/0) y los mensajes viajan por Redis.
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
+REDIS_URL = config('REDIS_URL', default='')
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }

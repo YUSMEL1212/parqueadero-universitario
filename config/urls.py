@@ -11,6 +11,9 @@ urlpatterns = [
     path('api/', include('vehiculos.urls')),
     # Accesos: QR del conductor, portería (entrada, salida, invitados) e historial
     path('api/', include('accesos.urls')),
+    # IoT: sensores, cámara LPR (llave de dispositivo), cupos y reporte de sensores.
+    # El WebSocket ws/cupos se enruta en config/asgi.py.
+    path('api/', include('iot.urls')),
     # Documentación OpenAPI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

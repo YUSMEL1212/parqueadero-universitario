@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.db.models import Q
 
@@ -41,6 +43,10 @@ class Bahia(models.Model):
         return f'{self.codigo} ({self.estado})'
 
 
+# Sin mensajes ni latidos durante más de este tiempo, el sensor está desconectado.
+LIMITE_SIN_PULSO = timedelta(seconds=90)
+
+
 class EstadoSensor(models.TextChoices):
     OK = 'ok', 'OK'
     DESCONECTADO = 'desconectado', 'Desconectado'
@@ -75,6 +81,18 @@ class Sensor(models.Model):
 
     def __str__(self):
         return f'{self.device_uid} ({self.estado})'
+
+    def estado_en(self, momento):
+        """Estado del sensor calculado en `momento` a partir de su último pulso.
+
+        La columna `estado` solo manda cuando un administrador marca `falla`; ok y
+        desconectado se deducen siempre del pulso, así nunca quedan desactualizados.
+        """
+        if self.estado == EstadoSensor.FALLA:
+            return EstadoSensor.FALLA
+        if self.ultimo_pulso is None or momento - self.ultimo_pulso > LIMITE_SIN_PULSO:
+            return EstadoSensor.DESCONECTADO
+        return EstadoSensor.OK
 
 
 class EventoSensor(models.Model):

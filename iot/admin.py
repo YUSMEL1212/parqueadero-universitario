@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import Bahia, EventoSensor, LecturaLPR, Sensor
 
@@ -12,9 +13,12 @@ class BahiaAdmin(admin.ModelAdmin):
 
 @admin.register(Sensor)
 class SensorAdmin(admin.ModelAdmin):
-    list_display = ('device_uid', 'bahia', 'estado', 'ultimo_pulso')
-    list_filter = ('estado',)
+    list_display = ('device_uid', 'bahia', 'estado_actual', 'ultimo_pulso')
     search_fields = ('device_uid', 'bahia__codigo')
+
+    @admin.display(description='estado (según último pulso)')
+    def estado_actual(self, obj):
+        return obj.estado_en(timezone.now())
 
 
 @admin.register(EventoSensor)
