@@ -187,6 +187,11 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API del sistema de parqueadero universitario con IoT (Unimonserrate).',
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    # carro/moto aparece como `tipo` (vehículos) y `tipo_vehiculo` (tarifas, bahías…):
+    # un solo enum en el esquema.
+    'ENUM_NAME_OVERRIDES': {
+        'TipoVehiculoEnum': 'vehiculos.models.TipoVehiculo',
+    },
 }
 
 

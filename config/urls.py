@@ -9,6 +9,8 @@ urlpatterns = [
     path('api/auth/', include('usuarios.urls')),
     # Vehículos del conductor autenticado (el administrador ve todos)
     path('api/', include('vehiculos.urls')),
+    # Tarifas vigentes (cualquier autenticado), historial y cambio (administrador)
+    path('api/', include('tarifas.urls')),
     # Accesos: QR del conductor, portería (entrada, salida, invitados) e historial
     path('api/', include('accesos.urls')),
     # IoT: sensores, cámara LPR (llave de dispositivo), cupos y reporte de sensores.
