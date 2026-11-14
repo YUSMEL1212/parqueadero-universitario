@@ -1444,6 +1444,45 @@ select.campo__control {
   }
 }
 
+/* ---- Conductor: pago de mensualidad ---- */
+.pago__concepto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.pago__concepto > div {
+  flex: 1 1 200px;
+}
+
+.pago__precio {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pago__nota {
+  margin-top: -6px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.liquidacion__dato--ancho {
+  grid-column: 1 / -1;
+}
+
+.referencia {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Administrador ---- */
 /* El panel usa tablas anchas: la zona del administrador se ensancha. */
 .zona__contenido:has(> .admin) {

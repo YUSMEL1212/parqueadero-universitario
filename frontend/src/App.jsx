@@ -18,11 +18,11 @@ import {
   RUTA_TARIFAS,
   RUTA_USUARIOS,
 } from './pages/admin/rutas';
-import EnConstruccion from './pages/conductor/EnConstruccion';
 import Historial from './pages/conductor/Historial';
 import InicioConductor from './pages/conductor/InicioConductor';
 import LayoutConductor from './pages/conductor/LayoutConductor';
 import MisVehiculos from './pages/conductor/MisVehiculos';
+import PagarMensualidad from './pages/conductor/PagarMensualidad';
 import {
   RUTA_HISTORIAL,
   RUTA_INICIO_CONDUCTOR,
@@ -58,15 +58,7 @@ export default function App() {
             <Route path={RUTA_INICIO_CONDUCTOR} element={<InicioConductor />} />
             <Route path={RUTA_VEHICULOS} element={<MisVehiculos />} />
             <Route path={RUTA_HISTORIAL} element={<Historial />} />
-            {/* Ruta preparada: la pantalla real reemplaza a EnConstruccion. */}
-            <Route
-              path={RUTA_PAGAR_MENSUALIDAD}
-              element={
-                <EnConstruccion titulo="Pagar mensualidad">
-                  El pago en línea de la mensualidad estará disponible pronto.
-                </EnConstruccion>
-              }
-            />
+            <Route path={RUTA_PAGAR_MENSUALIDAD} element={<PagarMensualidad />} />
           </Route>
         </Route>
       </Route>

@@ -74,7 +74,9 @@ Validación de placa según el tipo: carro `^[A-Z]{3}[0-9]{3}$`, moto `^[A-Z]{3}
 | concepto | VARCHAR(15) | CHECK: mensualidad o fraccion |
 | valor | INTEGER | Pesos colombianos |
 | metodo | VARCHAR(10) | CHECK: pse, tarjeta o efectivo |
-| referencia_pasarela | VARCHAR(60) | Id de la transacción en la pasarela |
+| referencia_pasarela | VARCHAR(60) | UNIQUE. Referencia que se envía a la pasarela y con la que vuelve su confirmación |
+| transaccion_pasarela | VARCHAR(60) | Id de la transacción en Wompi, al confirmarse |
+| tipo_vehiculo | VARCHAR(5) | CHECK: carro o moto. Solo mensualidades: el tipo que cubrirá al aprobarse |
 | estado | VARCHAR(10) | CHECK: pendiente, aprobado o rechazado |
 | pagado_en | TIMESTAMPTZ | |
 

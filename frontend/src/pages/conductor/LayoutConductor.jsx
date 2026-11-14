@@ -4,7 +4,12 @@
  */
 import { NavLink, Outlet } from 'react-router-dom';
 
-import { RUTA_HISTORIAL, RUTA_INICIO_CONDUCTOR, RUTA_VEHICULOS } from './rutas';
+import {
+  RUTA_HISTORIAL,
+  RUTA_INICIO_CONDUCTOR,
+  RUTA_PAGAR_MENSUALIDAD,
+  RUTA_VEHICULOS,
+} from './rutas';
 
 const PROPS_ICONO = {
   width: 24,
@@ -52,8 +57,7 @@ const ICONOS = {
 const SECCIONES = [
   { clave: 'inicio', texto: 'Inicio', ruta: RUTA_INICIO_CONDUCTOR, exacta: true },
   { clave: 'vehiculos', texto: 'Vehículos', ruta: RUTA_VEHICULOS },
-  // Pagos aún no tiene pantalla: se muestra deshabilitado.
-  { clave: 'pagos', texto: 'Pagos', ruta: null },
+  { clave: 'pagos', texto: 'Pagos', ruta: RUTA_PAGAR_MENSUALIDAD },
   { clave: 'historial', texto: 'Historial', ruta: RUTA_HISTORIAL },
 ];
 

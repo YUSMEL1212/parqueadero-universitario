@@ -41,6 +41,17 @@ IOT_DEVICE_KEY = config('IOT_DEVICE_KEY', default='')
 # Confianza mínima (0 a 1) para aceptar una lectura de placa de la cámara LPR.
 LPR_CONFIANZA_MINIMA = config('LPR_CONFIANZA_MINIMA', default=0.80, cast=float)
 
+# Pasarela de pagos Wompi (pagos/wompi.py). Sin llave pública y privada, los pagos de
+# mensualidad funcionan en modo simulación: una página interna aprueba o rechaza el
+# pago y dispara el mismo webhook, para demostrar el flujo sin cuenta en Wompi.
+WOMPI_PUBLIC_KEY = config('WOMPI_PUBLIC_KEY', default='')
+WOMPI_PRIVATE_KEY = config('WOMPI_PRIVATE_KEY', default='')
+# True = ambiente de pruebas de Wompi (sandbox.wompi.co); False = producción.
+WOMPI_SANDBOX = config('WOMPI_SANDBOX', default=True, cast=bool)
+# Secreto de integridad (panel de Wompi > Desarrolladores). Wompi lo exige para firmar
+# el checkout; solo hace falta fuera del modo simulación.
+WOMPI_INTEGRITY_SECRET = config('WOMPI_INTEGRITY_SECRET', default='')
+
 # Orígenes del frontend (PWA) que pueden llamar a la API desde el navegador.
 # Lista separada por comas, con esquema y puerto, sin barra final.
 # Ej.: CORS_ALLOWED_ORIGINS=http://localhost:5173,https://parqueadero.example.com
@@ -204,6 +215,9 @@ SPECTACULAR_SETTINGS = {
     # un solo enum en el esquema.
     'ENUM_NAME_OVERRIDES': {
         'TipoVehiculoEnum': 'vehiculos.models.TipoVehiculo',
+        # `metodo` del pago: todos (efectivo, tarjeta, PSE) y los del pago en línea.
+        'MetodoPagoEnum': 'pagos.models.MetodoPago',
+        'MetodoPagoEnLineaEnum': 'pagos.serializers.METODOS_EN_LINEA',
     },
 }
 

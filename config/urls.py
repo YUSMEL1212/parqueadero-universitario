@@ -19,7 +19,7 @@ urlpatterns = [
     # IoT: sensores, cámara LPR (llave de dispositivo), cupos y reporte de sensores.
     # El WebSocket ws/cupos se enruta en config/asgi.py.
     path('api/', include('iot.urls')),
-    # Pagos: mensualidades vigentes del conductor (la pasarela llega después)
+    # Pagos: mensualidades vigentes, precio, pago con Wompi (o simulado) y webhook
     path('api/', include('pagos.urls')),
     # Documentación OpenAPI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

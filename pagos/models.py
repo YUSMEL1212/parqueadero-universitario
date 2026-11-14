@@ -48,7 +48,21 @@ class Pago(models.Model):
         max_length=60,
         null=True,
         blank=True,
-        help_text='Id de la transacción en la pasarela.',
+        help_text='Referencia única que se envía a la pasarela y con la que llega su '
+        'confirmación.',
+    )
+    transaccion_pasarela = models.CharField(
+        max_length=60,
+        null=True,
+        blank=True,
+        help_text='Id de la transacción en la pasarela (Wompi), cuando la confirma.',
+    )
+    tipo_vehiculo = models.CharField(
+        max_length=5,
+        choices=TipoVehiculo.choices,
+        null=True,
+        blank=True,
+        help_text='Solo mensualidades: tipo que cubrirá la mensualidad al aprobarse.',
     )
     estado = models.CharField(
         max_length=10, choices=EstadoPago.choices, default=EstadoPago.PENDIENTE
@@ -71,6 +85,18 @@ class Pago(models.Model):
             models.CheckConstraint(
                 condition=Q(estado__in=EstadoPago.values),
                 name='pagos_estado_valido',
+            ),
+            models.CheckConstraint(
+                condition=Q(tipo_vehiculo__in=TipoVehiculo.values)
+                | Q(tipo_vehiculo__isnull=True),
+                name='pagos_tipo_vehiculo_valido',
+            ),
+            # La confirmación de la pasarela se busca por referencia: no puede repetirse.
+            # Varios NULL sí se admiten (pagos en efectivo de portería).
+            models.UniqueConstraint(
+                fields=['referencia_pasarela'],
+                name='pagos_referencia_unica',
+                violation_error_message='Ya existe un pago con esa referencia.',
             ),
         ]
 
