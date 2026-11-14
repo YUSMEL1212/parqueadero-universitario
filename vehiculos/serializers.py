@@ -1,5 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
@@ -28,10 +30,23 @@ class VehiculoSerializer(serializers.ModelSerializer):
         help_text='Se acepta con guion, espacios o minúsculas; se guarda como ABC123.',
     )
 
+    adentro = serializers.SerializerMethodField(
+        help_text='True si el vehículo tiene un ingreso abierto (está dentro del parqueadero).'
+    )
+
     class Meta:
         model = Vehiculo
-        fields = ['id', 'placa', 'tipo', 'activo', 'usuario', 'creado_en']
+        fields = ['id', 'placa', 'tipo', 'activo', 'adentro', 'usuario', 'creado_en']
         read_only_fields = ['id', 'usuario', 'creado_en']
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_adentro(self, vehiculo):
+        # La lista anota `esta_adentro` en una sola consulta (VehiculoViewSet.get_queryset);
+        # un vehículo recién creado no trae la anotación y se consulta directamente.
+        anotado = getattr(vehiculo, 'esta_adentro', None)
+        if anotado is not None:
+            return anotado
+        return vehiculo.tiene_ticket_abierto()
 
     def validate(self, attrs):
         # En un PATCH puede llegar solo la placa o solo el tipo: se valida la

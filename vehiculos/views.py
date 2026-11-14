@@ -1,3 +1,4 @@
+from django.db.models import Exists, OuterRef
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiResponse,
@@ -7,6 +8,7 @@ from drf_spectacular.utils import (
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
+from accesos.models import Ticket
 from comun.permisos import EsAdministrador
 
 from .models import Vehiculo
@@ -17,7 +19,8 @@ EJEMPLO_VEHICULO = {
     'placa': 'ABC123',
     'tipo': 'carro',
     'activo': True,
-    'usuario': '3f2c8a1e-5b7d-4c9a-9e1f-2a6b8c4d0e11',
+    'adentro': False,
+    'usuario':'3f2c8a1e-5b7d-4c9a-9e1f-2a6b8c4d0e11',
     'creado_en': '2026-11-13T09:10:00-05:00',
 }
 
@@ -44,7 +47,9 @@ NO_ENCONTRADO = OpenApiResponse(
 @extend_schema_view(
     list=extend_schema(
         summary='Listar vehículos',
-        description='El conductor ve solo sus vehículos; el administrador ve todos.',
+        description='El conductor ve solo sus vehículos; el administrador ve todos. '
+        '`adentro` indica si el vehículo tiene un ingreso abierto en este momento. Los '
+        'vehículos eliminados que tenían historial aparecen con `activo=false`.',
         examples=[OpenApiExample('Lista', response_only=True, value=[EJEMPLO_VEHICULO])],
     ),
     create=extend_schema(
@@ -99,7 +104,8 @@ class VehiculoViewSet(viewsets.ModelViewSet):
         return EsAdministrador().has_permission(self.request, self)
 
     def get_queryset(self):
-        vehiculos = Vehiculo.objects.order_by('-creado_en')
+        abierto = Ticket.objects.filter(vehiculo=OuterRef('pk'), hora_salida__isnull=True)
+        vehiculos = Vehiculo.objects.annotate(esta_adentro=Exists(abierto)).order_by('-creado_en')
         if getattr(self, 'swagger_fake_view', False):
             # drf-spectacular genera el esquema sin usuario autenticado.
             return vehiculos.none()

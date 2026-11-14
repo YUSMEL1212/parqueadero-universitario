@@ -6,18 +6,18 @@
  *   4. Estado de la mensualidad del tipo de ese vehículo.
  */
 import { QRCodeSVG } from 'qrcode.react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import api from '../../api/client';
 import { leerError } from '../../api/errores';
 import { useAuth } from '../../auth/AuthContext';
+import useConsulta from '../../hooks/useConsulta';
 import useCupos from '../../hooks/useCupos';
 import useQR from '../../hooks/useQR';
 import { RUTA_PAGAR_MENSUALIDAD, RUTA_VEHICULOS } from './rutas';
+import { NOMBRE_TIPO, formatearPlaca } from './vehiculos';
 
 const CLAVE_VEHICULO = 'parqueadero.vehiculo-elegido';
-const NOMBRE_TIPO = { carro: 'Carro', moto: 'Moto' };
 const DIAS_AVISO_RENOVAR = 5;
 const MS_DIA = 24 * 60 * 60 * 1000;
 
@@ -26,11 +26,6 @@ const formatoFecha = new Intl.DateTimeFormat('es-CO', {
   month: 'long',
   year: 'numeric',
 });
-
-/** ABC123 → "ABC 123"; ABC12D → "ABC 12D". */
-function formatearPlaca(placa = '') {
-  return placa.length === 6 ? `${placa.slice(0, 3)} ${placa.slice(3)}` : placa;
-}
 
 function leerVehiculoGuardado() {
   try {
@@ -46,29 +41,6 @@ function guardarVehiculo(id) {
   } catch {
     // Sin almacenamiento: la elección dura lo que dure la pantalla.
   }
-}
-
-/** Pide `url` al montar; `recargar()` la vuelve a pedir. */
-function useConsulta(url) {
-  const [estado, setEstado] = useState({ datos: null, error: null, cargando: true });
-  const [intento, setIntento] = useState(0);
-
-  useEffect(() => {
-    let vigente = true;
-    api
-      .get(url)
-      .then(({ data }) => vigente && setEstado({ datos: data, error: null, cargando: false }))
-      .catch((error) => vigente && setEstado({ datos: null, error, cargando: false }));
-    return () => {
-      vigente = false;
-    };
-  }, [url, intento]);
-
-  const recargar = useCallback(() => {
-    setEstado((e) => ({ ...e, error: null, cargando: true }));
-    setIntento((n) => n + 1);
-  }, []);
-  return { ...estado, recargar };
 }
 
 /** Hora actual, actualizada cada `cadaMs` mientras `activo` sea true. */

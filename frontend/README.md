@@ -43,6 +43,8 @@ src/
 | `/login`     | público                     |
 | `/registro`  | público (crea un conductor) |
 | `/conductor` | rol `conductor`             |
+| `/conductor/vehiculos` | rol `conductor`   |
+| `/conductor/historial` | rol `conductor`   |
 | `/porteria`  | rol `guarda`                |
 | `/admin`     | rol `administrador`         |
 

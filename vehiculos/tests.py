@@ -204,6 +204,23 @@ class ModificarYEliminarTests(APITestCase):
         self.vehiculo.refresh_from_db()
         self.assertEqual(self.vehiculo.placa, 'ABC123')
 
+    def test_lista_indica_si_el_vehiculo_esta_adentro(self):
+        moto = Vehiculo.objects.create(usuario=self.conductor, placa='XYZ45K', tipo='moto')
+        self.abrir_ticket(vehiculo=moto, hora_salida=timezone.now())  # ya salió
+        self.abrir_ticket()  # el carro sigue adentro
+
+        resp = self.client.get(LISTA)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual({v['placa']: v['adentro'] for v in resp.data}, {'ABC123': True, 'XYZ45K': False})
+        self.assertTrue(self.client.get(detalle(self.vehiculo)).data['adentro'])
+
+    def test_vehiculo_recien_creado_no_esta_adentro(self):
+        resp = self.client.post(LISTA, {'placa': 'XYZ45K', 'tipo': 'moto'}, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertIs(resp.data['adentro'], False)
+
     def test_eliminar_sin_historial_borra(self):
         resp = self.client.delete(detalle(self.vehiculo))
 

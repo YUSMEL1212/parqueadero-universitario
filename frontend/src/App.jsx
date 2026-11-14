@@ -7,8 +7,16 @@ import Login from './pages/Login';
 import Registro from './pages/Registro';
 import InicioAdmin from './pages/admin/InicioAdmin';
 import EnConstruccion from './pages/conductor/EnConstruccion';
+import Historial from './pages/conductor/Historial';
 import InicioConductor from './pages/conductor/InicioConductor';
-import { RUTA_PAGAR_MENSUALIDAD, RUTA_VEHICULOS } from './pages/conductor/rutas';
+import LayoutConductor from './pages/conductor/LayoutConductor';
+import MisVehiculos from './pages/conductor/MisVehiculos';
+import {
+  RUTA_HISTORIAL,
+  RUTA_INICIO_CONDUCTOR,
+  RUTA_PAGAR_MENSUALIDAD,
+  RUTA_VEHICULOS,
+} from './pages/conductor/rutas';
 import InicioPorteria from './pages/porteria/InicioPorteria';
 
 export default function App() {
@@ -21,24 +29,20 @@ export default function App() {
 
       <Route element={<RutaProtegida roles={[ROLES.CONDUCTOR]} />}>
         <Route element={<ZonaLayout />}>
-          <Route path="/conductor" element={<InicioConductor />} />
-          {/* Rutas preparadas: las pantallas reales reemplazan a EnConstruccion. */}
-          <Route
-            path={RUTA_PAGAR_MENSUALIDAD}
-            element={
-              <EnConstruccion titulo="Pagar mensualidad">
-                El pago en línea de la mensualidad estará disponible pronto.
-              </EnConstruccion>
-            }
-          />
-          <Route
-            path={RUTA_VEHICULOS}
-            element={
-              <EnConstruccion titulo="Mis vehículos">
-                El registro de vehículos desde la app estará disponible pronto.
-              </EnConstruccion>
-            }
-          />
+          <Route element={<LayoutConductor />}>
+            <Route path={RUTA_INICIO_CONDUCTOR} element={<InicioConductor />} />
+            <Route path={RUTA_VEHICULOS} element={<MisVehiculos />} />
+            <Route path={RUTA_HISTORIAL} element={<Historial />} />
+            {/* Ruta preparada: la pantalla real reemplaza a EnConstruccion. */}
+            <Route
+              path={RUTA_PAGAR_MENSUALIDAD}
+              element={
+                <EnConstruccion titulo="Pagar mensualidad">
+                  El pago en línea de la mensualidad estará disponible pronto.
+                </EnConstruccion>
+              }
+            />
+          </Route>
         </Route>
       </Route>
 
