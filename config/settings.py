@@ -112,9 +112,14 @@ ASGI_APPLICATION = 'config.asgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
+        conn_max_age=0,
+        conn_health_checks=True,
     )
 }
+
+if 'postgresql' in DATABASES['default']['ENGINE']:
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS']['prepare_threshold'] = None
 
 
 # Usuario personalizado (login con email)
