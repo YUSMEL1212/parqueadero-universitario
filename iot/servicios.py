@@ -68,7 +68,8 @@ def procesar_mensaje_sensor(datos):
     `datos` ya viene validado por MensajeSensorSerializer:
       - latido=True: solo actualiza `ultimo_pulso`.
       - si no: guarda el evento, actualiza `ultimo_pulso` y el estado de la bahía. Si
-        la bahía cambió, emite el nuevo conteo de cupos cuando la transacción confirma.
+        la bahía cambió, la señal post_save emite el nuevo conteo de cupos cuando la
+        transacción confirma.
 
     Una bahía `fuera_servicio` no cambia por el sensor: la saca de servicio el
     administrador. El evento sí se guarda.
@@ -96,10 +97,9 @@ def procesar_mensaje_sensor(datos):
         nuevo_estado = EstadoBahia.OCUPADA if datos['ocupado'] else EstadoBahia.LIBRE
         if bahia.estado not in (nuevo_estado, EstadoBahia.FUERA_SERVICIO):
             bahia.estado = nuevo_estado
+            # La señal post_save de Bahia (iot/signals.py) emite el nuevo conteo al
+            # confirmar la transacción; aquí no se emite para no duplicar el mensaje.
             bahia.save(update_fields=['estado', 'actualizado_en'])
-            # robust=True: si la capa de canales falla, se registra en el log pero el
-            # sensor recibe su 200 (el cambio ya quedó guardado).
-            transaction.on_commit(emitir_cupos, robust=True)
     return bahia
 
 

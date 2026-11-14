@@ -9,7 +9,7 @@
  */
 import axios from 'axios';
 
-const BASE_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+export const BASE_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 
 const CLAVE_ACCESS = 'parqueadero.access';
 const CLAVE_REFRESH = 'parqueadero.refresh';

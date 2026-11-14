@@ -92,6 +92,12 @@ class SensorEstadoTests(DispositivoTestCase):
         self.assertEqual(mensaje['type'], 'cupos.actualizados')
         self.assertEqual(mensaje['cupos']['libres'], {'carro': 1, 'moto': 1})
 
+    def test_el_endpoint_emite_una_sola_vez(self):
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.enviar(URL_ESTADO, {'device_uid': 'ESP32-C01', 'ocupado': True})
+        # La señal es la única que emite: el servicio ya no registra su propio envío.
+        self.assertEqual(len(callbacks), 1)
+
     def test_bahia_que_se_libera(self):
         Bahia.objects.filter(codigo='M-01').update(estado=Bahia.Estado.OCUPADA)
         with self.captureOnCommitCallbacks(execute=True):
@@ -314,6 +320,56 @@ class LecturaLPRTests(DispositivoTestCase):
         resp = self.enviar(URL_LPR, {'camara_id': 'CAM-ENTRADA', 'placa': 'ABC123'}, llave='x')
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(LecturaLPR.objects.exists())
+
+
+class BahiaDesdeAdminTests(APITestCase):
+    """Un cambio guardado desde el admin de Django también emite por ws/cupos."""
+
+    @classmethod
+    def setUpTestData(cls):
+        crear_bahias()
+        cls.admin = Usuario.objects.create_superuser(
+            email='admin@parquing.test', password='x', nombre='Admin'
+        )
+
+    def setUp(self):
+        self.capa = get_channel_layer()
+        async_to_sync(self.capa.flush)()
+        self.canal = async_to_sync(self.capa.new_channel)()
+        async_to_sync(self.capa.group_add)(GRUPO_CUPOS, self.canal)
+        self.client.force_login(self.admin)
+        self.bahia = Bahia.objects.get(codigo='C-01')
+        self.url = f'/admin/iot/bahia/{self.bahia.pk}/change/'
+
+    def guardar(self, **cambios):
+        datos = {
+            'codigo': self.bahia.codigo,
+            'tipo_vehiculo': self.bahia.tipo_vehiculo,
+            'estado': self.bahia.estado,
+            **cambios,
+        }
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            resp = self.client.post(self.url, datos)
+        self.assertEqual(resp.status_code, 302)  # redirige a la lista: se guardó
+        return callbacks
+
+    def test_cambio_de_estado_emite(self):
+        callbacks = self.guardar(estado=Bahia.Estado.FUERA_SERVICIO)
+        self.assertEqual(len(callbacks), 1)
+        mensaje = async_to_sync(self.capa.receive)(self.canal)
+        self.assertEqual(mensaje['cupos']['libres'], {'carro': 1, 'moto': 1})
+
+    def test_cambio_de_tipo_emite(self):
+        callbacks = self.guardar(tipo_vehiculo='moto')
+        self.assertEqual(len(callbacks), 1)
+        mensaje = async_to_sync(self.capa.receive)(self.canal)
+        self.assertEqual(mensaje['cupos']['libres'], {'carro': 1, 'moto': 2})
+
+    def test_guardar_sin_cambios_no_emite(self):
+        self.assertEqual(self.guardar(), [])
+
+    def test_cambio_de_codigo_no_emite(self):
+        self.assertEqual(self.guardar(codigo='C-99'), [])
 
 
 @override_settings(IOT_DEVICE_KEY=LLAVE)
