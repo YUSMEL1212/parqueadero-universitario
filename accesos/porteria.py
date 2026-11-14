@@ -351,7 +351,9 @@ def confirmar_salida(ticket_id, metodo_pago=Pago.Metodo.EFECTIVO):
     """
     with transaction.atomic():
         ticket = (
-            Ticket.objects.select_for_update()
+            # of=('self',): solo se bloquea la fila del ticket. `usuario` es nulo en los
+            # invitados (LEFT JOIN) y PostgreSQL no admite FOR UPDATE sobre ese lado.
+            Ticket.objects.select_for_update(of=('self',))
             .select_related('vehiculo', 'usuario')
             .filter(pk=ticket_id)
             .first()

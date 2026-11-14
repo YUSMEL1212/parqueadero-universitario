@@ -1,12 +1,23 @@
 import { Suspense, lazy } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { ROLES } from './auth/roles';
 import { RedireccionInicio, RutaProtegida, RutaPublica } from './auth/rutas';
 import ZonaLayout from './components/ZonaLayout';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
-import InicioAdmin from './pages/admin/InicioAdmin';
+import LayoutAdmin from './pages/admin/LayoutAdmin';
+import Reportes from './pages/admin/Reportes';
+import Sensores from './pages/admin/Sensores';
+import Tarifas from './pages/admin/Tarifas';
+import Usuarios from './pages/admin/Usuarios';
+import {
+  RUTA_ADMIN,
+  RUTA_REPORTES,
+  RUTA_SENSORES,
+  RUTA_TARIFAS,
+  RUTA_USUARIOS,
+} from './pages/admin/rutas';
 import EnConstruccion from './pages/conductor/EnConstruccion';
 import Historial from './pages/conductor/Historial';
 import InicioConductor from './pages/conductor/InicioConductor';
@@ -80,7 +91,13 @@ export default function App() {
 
       <Route element={<RutaProtegida roles={[ROLES.ADMINISTRADOR]} />}>
         <Route element={<ZonaLayout />}>
-          <Route path="/admin" element={<InicioAdmin />} />
+          <Route element={<LayoutAdmin />}>
+            <Route path={RUTA_ADMIN} element={<Navigate to={RUTA_USUARIOS} replace />} />
+            <Route path={RUTA_USUARIOS} element={<Usuarios />} />
+            <Route path={RUTA_TARIFAS} element={<Tarifas />} />
+            <Route path={RUTA_SENSORES} element={<Sensores />} />
+            <Route path={RUTA_REPORTES} element={<Reportes />} />
+          </Route>
         </Route>
       </Route>
 

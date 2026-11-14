@@ -4,6 +4,7 @@ Vistas HTTP de la app accesos (rutas bajo /api/accesos/).
 - QRView: el conductor pide el token de su QR dinámico.
 - EntradaView, SalidaView, ConfirmarSalidaView, InvitadoView: portería, solo guardas.
 - HistorialView: recibos del conductor autenticado.
+- ReporteIngresosView: ingresos y cobros por día, solo administrador.
 
 Las vistas solo validan la entrada, llaman a accesos/porteria.py o accesos/qr.py y
 serializan la respuesta; las reglas de negocio no viven aquí. Cada vista queda
@@ -23,10 +24,10 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from comun.permisos import EsConductor, EsGuarda
+from comun.permisos import EsAdministrador, EsConductor, EsGuarda
 from vehiculos.models import Vehiculo
 
-from . import porteria
+from . import porteria, reportes
 from .models import Ticket
 from .qr import generar_token, segundos_restantes, validar_token
 from .serializers import (
@@ -34,7 +35,9 @@ from .serializers import (
     EntradaSerializer,
     InvitadoSerializer,
     LiquidacionSerializer,
+    ParametrosReporteSerializer,
     ReciboSerializer,
+    ReporteIngresosSerializer,
     SalidaSerializer,
     TicketSerializer,
 )
@@ -497,3 +500,68 @@ class HistorialView(APIView):
             .order_by('-hora_salida')
         )
         return Response(ReciboSerializer(recibos, many=True).data)
+
+
+class ReporteIngresosView(APIView):
+    """GET /api/reportes/ingresos: ingresos y cobros por día en un rango de fechas."""
+
+    permission_classes = [EsAdministrador]
+
+    @extend_schema(
+        tags=['reportes'],
+        summary='Ingresos por día',
+        description=(
+            'Una fila por cada día entre `desde` y `hasta` (ambos incluidos, hora de '
+            'Colombia), también los días sin movimiento, y los totales del rango.\n\n'
+            '- `ingresos`: vehículos que **entraron** ese día, separados en registrados e '
+            'invitados.\n'
+            '- `cobrado`: pesos cobrados en las **salidas** de ese día (la plata se cuenta '
+            'el día en que se recibe), con el mismo desglose. Las salidas con mensualidad '
+            'activa suman 0.\n\n'
+            'El pago de mensualidades no entra en este reporte. Sin fechas, devuelve los '
+            'últimos 7 días hasta hoy. El rango máximo es de 366 días. Solo administrador.'
+        ),
+        parameters=[
+            OpenApiParameter('desde', OpenApiTypes.DATE, required=False),
+            OpenApiParameter('hasta', OpenApiTypes.DATE, required=False),
+        ],
+        responses={
+            200: ReporteIngresosSerializer,
+            400: OpenApiResponse(description='Fecha inválida, desde > hasta o rango muy largo'),
+            401: OpenApiResponse(description='Sin token'),
+            403: OpenApiResponse(description='El usuario no es administrador'),
+        },
+        examples=[
+            OpenApiExample(
+                'Dos días',
+                response_only=True,
+                value={
+                    'desde': '2026-11-12',
+                    'hasta': '2026-11-13',
+                    'dias': [
+                        {'fecha': '2026-11-12', 'ingresos': 41, 'ingresos_registrados': 35,
+                         'ingresos_invitados': 6, 'cobrado': 186000,
+                         'cobrado_registrados': 132000, 'cobrado_invitados': 54000},
+                        {'fecha': '2026-11-13', 'ingresos': 38, 'ingresos_registrados': 33,
+                         'ingresos_invitados': 5, 'cobrado': 171000,
+                         'cobrado_registrados': 126000, 'cobrado_invitados': 45000},
+                    ],
+                    'totales': {'ingresos': 79, 'ingresos_registrados': 68,
+                                'ingresos_invitados': 11, 'cobrado': 357000,
+                                'cobrado_registrados': 258000, 'cobrado_invitados': 99000},
+                },
+            ),
+            OpenApiExample(
+                'Rango al revés',
+                response_only=True,
+                status_codes=['400'],
+                value={'desde': ['La fecha inicial no puede ser posterior a la final.']},
+            ),
+        ],
+    )
+    def get(self, request):
+        """Valida el rango y devuelve el reporte de accesos/reportes.py."""
+        parametros = ParametrosReporteSerializer(data=request.query_params)
+        parametros.is_valid(raise_exception=True)
+        reporte = reportes.ingresos_por_dia(**parametros.validated_data)
+        return Response(ReporteIngresosSerializer(reporte).data)

@@ -65,3 +65,25 @@ class LoginSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         attrs[self.username_field] = attrs[self.username_field].strip().lower()
         return super().validate(attrs)
+
+
+# --- Gestión de usuarios (administrador) --------------------------------------------
+
+
+class UsuarioAdminSerializer(serializers.ModelSerializer):
+    """Fila de la lista de usuarios del panel del administrador."""
+
+    rol = serializers.SlugRelatedField(slug_field='nombre', read_only=True)
+
+    class Meta:
+        model = Usuario
+        fields = ['id', 'nombre', 'email', 'rol', 'tipo_conductor', 'activo', 'creado_en']
+        read_only_fields = fields
+
+
+class CambiarRolSerializer(serializers.Serializer):
+    rol = serializers.ChoiceField(choices=NombreRol.choices)
+
+
+class CambiarEstadoSerializer(serializers.Serializer):
+    activo = serializers.BooleanField(help_text='false desactiva la cuenta: no puede iniciar sesión.')

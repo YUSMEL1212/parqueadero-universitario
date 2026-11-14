@@ -1,7 +1,8 @@
 """
 Rutas de la app accesos, montadas bajo /api/ en config/urls.py.
 
-QR del conductor, entrada, liquidación y confirmación de salida, invitados e historial.
+QR del conductor, entrada, liquidación y confirmación de salida, invitados, historial
+y el reporte de ingresos del administrador.
 """
 
 from django.urls import path
@@ -12,6 +13,7 @@ from .views import (
     HistorialView,
     InvitadoView,
     QRView,
+    ReporteIngresosView,
     SalidaView,
 )
 
@@ -25,4 +27,5 @@ urlpatterns = [
     path('accesos/salida/confirmar', ConfirmarSalidaView.as_view(), name='salida-confirmar'),
     path('accesos/invitados', InvitadoView.as_view(), name='invitados'),
     path('accesos/historial', HistorialView.as_view(), name='historial'),
+    path('reportes/ingresos', ReporteIngresosView.as_view(), name='reporte-ingresos'),
 ]

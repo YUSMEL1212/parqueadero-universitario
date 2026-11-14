@@ -7,11 +7,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Autenticación: registro, login/refresh JWT y perfil
     path('api/auth/', include('usuarios.urls')),
+    # Gestión de usuarios: lista, rol y activación (administrador)
+    path('api/', include('usuarios.urls_gestion')),
     # Vehículos del conductor autenticado (el administrador ve todos)
     path('api/', include('vehiculos.urls')),
     # Tarifas vigentes (cualquier autenticado), historial y cambio (administrador)
     path('api/', include('tarifas.urls')),
-    # Accesos: QR del conductor, portería (entrada, salida, invitados) e historial
+    # Accesos: QR del conductor, portería (entrada, salida, invitados), historial y
+    # reporte de ingresos por día (administrador)
     path('api/', include('accesos.urls')),
     # IoT: sensores, cámara LPR (llave de dispositivo), cupos y reporte de sensores.
     # El WebSocket ws/cupos se enruta en config/asgi.py.

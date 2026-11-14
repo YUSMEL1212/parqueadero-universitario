@@ -6,12 +6,15 @@ invitados) y dan forma a las respuestas (ticket abierto, liquidación y recibo).
 entrada no guardan nada: las reglas de negocio se aplican en accesos/porteria.py.
 """
 
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from pagos.models import MetodoPago
 from vehiculos.models import TipoVehiculo, normalizar_placa, validar_placa
 
+from . import reportes
 from .models import Ticket
 
 
@@ -161,3 +164,46 @@ class ReciboSerializer(serializers.ModelSerializer):
             'pago',
             'metodo_pago',
         ]
+
+
+# --- Reporte de ingresos (administrador) --------------------------------------------
+
+
+class ParametrosReporteSerializer(serializers.Serializer):
+    """Query de GET /api/reportes/ingresos. Sin fechas: los últimos 7 días hasta hoy."""
+
+    desde = serializers.DateField(required=False, help_text='Primer día (AAAA-MM-DD).')
+    hasta = serializers.DateField(required=False, help_text='Último día, incluido.')
+
+    def validate(self, attrs):
+        hasta = attrs.get('hasta') or reportes.hoy()
+        desde = attrs.get('desde') or hasta - timedelta(days=6)
+        if desde > hasta:
+            raise serializers.ValidationError(
+                {'desde': 'La fecha inicial no puede ser posterior a la final.'}
+            )
+        if (hasta - desde).days + 1 > reportes.MAX_DIAS:
+            raise serializers.ValidationError(
+                {'desde': f'El rango no puede superar {reportes.MAX_DIAS} días.'}
+            )
+        return {'desde': desde, 'hasta': hasta}
+
+
+class _ValoresReporteSerializer(serializers.Serializer):
+    ingresos = serializers.IntegerField(help_text='Vehículos que entraron.')
+    ingresos_registrados = serializers.IntegerField()
+    ingresos_invitados = serializers.IntegerField()
+    cobrado = serializers.IntegerField(help_text='Pesos cobrados en las salidas.')
+    cobrado_registrados = serializers.IntegerField()
+    cobrado_invitados = serializers.IntegerField()
+
+
+class DiaReporteSerializer(_ValoresReporteSerializer):
+    fecha = serializers.DateField()
+
+
+class ReporteIngresosSerializer(serializers.Serializer):
+    desde = serializers.DateField()
+    hasta = serializers.DateField()
+    dias = DiaReporteSerializer(many=True)
+    totales = _ValoresReporteSerializer()
