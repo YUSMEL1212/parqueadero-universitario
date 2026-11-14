@@ -1,3 +1,9 @@
+"""
+Rutas de la app accesos, montadas bajo /api/ en config/urls.py.
+
+QR del conductor, entrada, liquidación y confirmación de salida, invitados e historial.
+"""
+
 from django.urls import path
 
 from .views import (

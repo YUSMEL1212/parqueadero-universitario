@@ -24,7 +24,11 @@ LARGO_CODIGO = 8
 
 
 def ahora():
-    """Hora actual. Las pruebas la reemplazan para simular el paso del tiempo."""
+    """Hora actual. Las pruebas la reemplazan para simular el paso del tiempo.
+
+    Devuelve:
+        datetime: hora actual con zona horaria (``django.utils.timezone.now``).
+    """
     return timezone.now()
 
 
@@ -32,31 +36,57 @@ def ahora():
 
 
 class ErrorPorteria(Exception):
+    """Error de negocio de la portería, con su código HTTP y un `codigo` estable.
+
+    Las vistas de portería lo capturan y responden con ``como_respuesta()`` y el
+    código HTTP de ``status``. Las subclases solo cambian ``status``.
+    """
+
     status = 400
 
     def __init__(self, mensaje, codigo, **extra):
+        """Crea el error.
+
+        Parámetros:
+            mensaje (str): texto para mostrar al guarda.
+            codigo (str): identificador estable del caso (p. ej. 'vehiculo_adentro').
+            **extra: campos adicionales que se agregan a la respuesta JSON.
+        """
         super().__init__(mensaje)
         self.mensaje = mensaje
         self.codigo = codigo
         self.extra = extra
 
     def como_respuesta(self):
+        """Cuerpo JSON de la respuesta de error.
+
+        Devuelve:
+            dict: ``{'detail': ..., 'codigo': ..., **extra}``.
+        """
         return {'detail': self.mensaje, 'codigo': self.codigo, **self.extra}
 
 
 class QRInvalido(ErrorPorteria):
+    """El QR está vencido, alterado o ilegible (HTTP 400)."""
+
     status = 400
 
 
 class NoEncontrado(ErrorPorteria):
+    """No existe el vehículo, el ticket o el ticket abierto buscado (HTTP 404)."""
+
     status = 404
 
 
 class Conflicto(ErrorPorteria):
+    """La operación choca con el estado actual: vehículo adentro, ticket cerrado, etc. (HTTP 409)."""
+
     status = 409
 
 
 class SinTarifaVigente(ErrorPorteria):
+    """No hay tarifa vigente para calcular el cobro; es un problema de configuración (HTTP 503)."""
+
     status = 503
 
 
@@ -64,7 +94,18 @@ class SinTarifaVigente(ErrorPorteria):
 
 
 def _leer_qr(token):
-    """Valida el token y devuelve el vehículo (con su usuario) que lo generó."""
+    """Valida el token y devuelve el vehículo (con su usuario) que lo generó.
+
+    Parámetros:
+        token (str): texto leído del QR del conductor.
+
+    Devuelve:
+        Vehiculo: el vehículo del token, con ``usuario`` ya cargado.
+
+    Lanza:
+        QRInvalido: con codigo 'qr_vencido', 'qr_alterado' o 'qr_ilegible'.
+        NoEncontrado: si el vehículo ya no existe o cambió de dueño ('vehiculo_no_existe').
+    """
     try:
         datos = validar_token(token)
     except TokenQRVencido as exc:
@@ -85,6 +126,16 @@ def _leer_qr(token):
 
 
 def _conflicto_vehiculo_adentro(usuario_id):
+    """Arma el error de "ya tiene un vehículo adentro", con la placa si se encuentra.
+
+    No lanza el error: lo devuelve para que quien llama haga ``raise``.
+
+    Parámetros:
+        usuario_id: id del conductor que intenta ingresar.
+
+    Devuelve:
+        Conflicto: con codigo 'vehiculo_adentro' y ``placa_adentro`` (o None).
+    """
     abierto = (
         Ticket.objects.select_related('vehiculo')
         .filter(usuario_id=usuario_id, hora_salida__isnull=True)
@@ -101,7 +152,11 @@ def _conflicto_vehiculo_adentro(usuario_id):
 
 
 def _nuevo_codigo_salida():
-    """Código de 8 caracteres que no repite el de ningún invitado que esté adentro."""
+    """Código de 8 caracteres que no repite el de ningún invitado que esté adentro.
+
+    Devuelve:
+        str: código aleatorio con caracteres de ``ALFABETO_CODIGO``.
+    """
     while True:
         codigo = ''.join(secrets.choice(ALFABETO_CODIGO) for _ in range(LARGO_CODIGO))
         if not Ticket.objects.filter(codigo_salida=codigo, hora_salida__isnull=True).exists():
@@ -109,6 +164,18 @@ def _nuevo_codigo_salida():
 
 
 def _cobrar(ticket, hora_salida):
+    """Aplica el motor de cobro a un ticket y traduce la falta de tarifa a error de portería.
+
+    Parámetros:
+        ticket (Ticket): ticket abierto, con ``vehiculo`` y ``usuario`` disponibles.
+        hora_salida (datetime): momento de salida con el que se calcula.
+
+    Devuelve:
+        dict: el resultado de ``calcular_cobro`` (valor, minutos, tarifa, motivo).
+
+    Lanza:
+        SinTarifaVigente: si no hay tarifa vigente para el caso ('sin_tarifa_vigente').
+    """
     try:
         return calcular_cobro(
             ticket.hora_entrada, hora_salida, ticket.vehiculo.tipo, usuario=ticket.usuario
@@ -118,6 +185,16 @@ def _cobrar(ticket, hora_salida):
 
 
 def _liquidacion(ticket, hora_salida, cobro):
+    """Arma el dict de liquidación que se muestra al guarda antes de cobrar.
+
+    Parámetros:
+        ticket (Ticket): ticket que se liquida.
+        hora_salida (datetime): hora de salida usada en el cálculo.
+        cobro (dict): resultado de ``calcular_cobro``.
+
+    Devuelve:
+        dict: con la forma de ``LiquidacionSerializer``.
+    """
     return {
         'ticket_id': ticket.pk,
         'placa': ticket.vehiculo.placa,
@@ -144,7 +221,21 @@ def _liquidacion(ticket, hora_salida, cobro):
 
 
 def registrar_entrada(token, guarda):
-    """Ingreso de un conductor registrado con su QR. Devuelve el Ticket creado."""
+    """Ingreso de un conductor registrado con su QR. Devuelve el Ticket creado.
+
+    Parámetros:
+        token (str): texto leído del QR del conductor.
+        guarda (Usuario): guarda que registra el ingreso.
+
+    Devuelve:
+        Ticket: ticket abierto con ``tipo_ingreso='registrado'`` y ``metodo_ingreso='qr'``.
+
+    Lanza:
+        QRInvalido: si el QR está vencido, alterado o ilegible.
+        NoEncontrado: si el vehículo del QR ya no existe.
+        Conflicto: si la cuenta o el vehículo están desactivados, o si el conductor ya
+            tiene un vehículo adentro.
+    """
     vehiculo = _leer_qr(token)
     conductor = vehiculo.usuario
     if not conductor.activo:
@@ -152,6 +243,8 @@ def registrar_entrada(token, guarda):
     if not vehiculo.activo:
         raise Conflicto('El vehículo está desactivado.', 'vehiculo_inactivo')
 
+    # Regla TDR (flujo 4): un usuario no puede tener dos vehículos dentro a la vez. Se
+    # revisa antes de crear para responder 409 con la placa del vehículo que está adentro.
     if Ticket.objects.filter(usuario=conductor, hora_salida__isnull=True).exists():
         raise _conflicto_vehiculo_adentro(conductor.pk)
 
@@ -171,6 +264,18 @@ def registrar_entrada(token, guarda):
 
 
 def buscar_ticket_por_qr(token):
+    """Busca el ticket abierto del conductor que presenta su QR en la salida.
+
+    Parámetros:
+        token (str): texto leído del QR del conductor.
+
+    Devuelve:
+        Ticket: el ticket abierto del conductor (sea cual sea el vehículo).
+
+    Lanza:
+        QRInvalido: si el QR está vencido, alterado o ilegible.
+        NoEncontrado: si el vehículo no existe o el conductor no tiene ticket abierto.
+    """
     vehiculo = _leer_qr(token)
     ticket = (
         Ticket.objects.select_related('vehiculo', 'usuario')
@@ -183,6 +288,17 @@ def buscar_ticket_por_qr(token):
 
 
 def buscar_ticket_por_codigo(codigo):
+    """Busca el ticket abierto de un invitado por su código de salida.
+
+    Parámetros:
+        codigo (str): código impreso en el ticket; se aceptan minúsculas y espacios.
+
+    Devuelve:
+        Ticket: el ticket de invitado abierto con ese código.
+
+    Lanza:
+        NoEncontrado: si no hay un invitado adentro con ese código ('sin_ticket_abierto').
+    """
     ticket = (
         Ticket.objects.select_related('vehiculo')
         .filter(
@@ -200,7 +316,17 @@ def buscar_ticket_por_codigo(codigo):
 
 
 def liquidar_salida(ticket):
-    """Calcula lo que se cobraría si el vehículo sale ahora. No modifica el ticket."""
+    """Calcula lo que se cobraría si el vehículo sale ahora. No modifica el ticket.
+
+    Parámetros:
+        ticket (Ticket): ticket abierto.
+
+    Devuelve:
+        dict: liquidación con la forma de ``LiquidacionSerializer``.
+
+    Lanza:
+        SinTarifaVigente: si no hay tarifa vigente para el caso.
+    """
     hora_salida = ahora()
     return _liquidacion(ticket, hora_salida, _cobrar(ticket, hora_salida))
 
@@ -210,6 +336,18 @@ def confirmar_salida(ticket_id, metodo_pago=Pago.Metodo.EFECTIVO):
 
     El cobro se recalcula aquí (no se confía en el valor que mostró la liquidación),
     así que si entre liquidar y confirmar se cruzan los 120 minutos, se cobra mas_2h.
+
+    Parámetros:
+        ticket_id: id (UUID) del ticket a cerrar.
+        metodo_pago (str): método del pago si hay cobro; por defecto, efectivo.
+
+    Devuelve:
+        Ticket: el ticket cerrado, con hora de salida, minutos, valor, tarifa y pago.
+
+    Lanza:
+        NoEncontrado: si el ticket no existe ('ticket_no_existe').
+        Conflicto: si el ticket ya estaba cerrado ('ticket_cerrado').
+        SinTarifaVigente: si no hay tarifa vigente para el caso.
     """
     with transaction.atomic():
         ticket = (
@@ -226,6 +364,8 @@ def confirmar_salida(ticket_id, metodo_pago=Pago.Metodo.EFECTIVO):
         hora_salida = ahora()
         cobro = _cobrar(ticket, hora_salida)
 
+        # Regla TDR (motor de cobro, paso 1): con mensualidad activa el cobro es 0, así
+        # que no se crea ningún pago.
         if cobro['valor'] > 0:
             ticket.pago = Pago.objects.create(
                 usuario=ticket.usuario,
@@ -238,6 +378,7 @@ def confirmar_salida(ticket_id, metodo_pago=Pago.Metodo.EFECTIVO):
         ticket.hora_salida = hora_salida
         ticket.minutos = cobro['minutos']
         ticket.valor_cobrado = cobro['valor']
+        # Regla TDR (motor de cobro, paso 4): el ticket guarda qué tarifa_id se aplicó.
         ticket.tarifa = cobro['tarifa']
         ticket.save(
             update_fields=['hora_salida', 'minutos', 'valor_cobrado', 'tarifa', 'pago']
@@ -246,7 +387,21 @@ def confirmar_salida(ticket_id, metodo_pago=Pago.Metodo.EFECTIVO):
 
 
 def registrar_invitado(placa, tipo, guarda):
-    """Ingreso de un invitado. `placa` ya viene normalizada y validada contra `tipo`."""
+    """Ingreso de un invitado. `placa` ya viene normalizada y validada contra `tipo`.
+
+    Parámetros:
+        placa (str): placa normalizada (mayúsculas, sin guion).
+        tipo (str): 'carro' o 'moto'.
+        guarda (Usuario): guarda que registra el ingreso.
+
+    Devuelve:
+        Ticket: ticket abierto de tipo 'invitado', método 'manual' y con
+        ``codigo_salida`` de 8 caracteres.
+
+    Lanza:
+        Conflicto: si la placa es de un conductor registrado ('placa_registrada') o el
+            vehículo ya está adentro ('vehiculo_adentro').
+    """
     vehiculo = Vehiculo.objects.filter(placa=placa).first()
     if vehiculo is not None and vehiculo.usuario_id is not None:
         raise Conflicto(
@@ -260,6 +415,8 @@ def registrar_invitado(placa, tipo, guarda):
         if vehiculo is None:
             # Vehículo sin usuario; si el invitado vuelve otro día se reutiliza.
             vehiculo = Vehiculo.objects.create(placa=placa, tipo=tipo, usuario=None)
+        # Regla TDR (motor de cobro, paso 3; flujo 3): el ticket va con usuario=None, así
+        # el motor de cobro nunca encuentra mensualidad y el invitado paga tarifa completa.
         return Ticket.objects.create(
             vehiculo=vehiculo,
             usuario=None,

@@ -1,3 +1,15 @@
+"""
+Vistas HTTP de la app accesos (rutas bajo /api/accesos/).
+
+- QRView: el conductor pide el token de su QR dinámico.
+- EntradaView, SalidaView, ConfirmarSalidaView, InvitadoView: portería, solo guardas.
+- HistorialView: recibos del conductor autenticado.
+
+Las vistas solo validan la entrada, llaman a accesos/porteria.py o accesos/qr.py y
+serializan la respuesta; las reglas de negocio no viven aquí. Cada vista queda
+documentada en drf-spectacular (/api/docs) con ejemplos.
+"""
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -46,6 +58,8 @@ RespuestaQR = inline_serializer(
 
 
 class QRView(APIView):
+    """GET /api/accesos/qr: token del QR dinámico del conductor autenticado."""
+
     permission_classes = [EsConductor]
 
     @extend_schema(
@@ -90,6 +104,16 @@ class QRView(APIView):
         ],
     )
     def get(self, request):
+        """Genera un token QR para un vehículo activo del conductor.
+
+        Parámetros:
+            request (Request): petición autenticada; acepta ``?vehiculo=<id>`` opcional.
+
+        Devuelve:
+            Response: 200 con token, vencimiento, segundos restantes y vehículo; 400 si
+            hay varios vehículos activos sin indicar cuál o el id no es válido; 404 si no
+            tiene un vehículo activo con ese id.
+        """
         activos = Vehiculo.objects.filter(usuario=request.user, activo=True)
         vehiculo_id = request.query_params.get('vehiculo')
 
@@ -175,17 +199,39 @@ class _VistaPorteria(APIView):
     permission_classes = [EsGuarda]
 
     def handle_exception(self, exc):
+        """Responde los ErrorPorteria con su status; el resto lo maneja DRF.
+
+        Parámetros:
+            exc (Exception): excepción lanzada durante la vista.
+
+        Devuelve:
+            Response: ``{'detail', 'codigo', ...}`` con el status del error, o la
+            respuesta estándar de DRF para cualquier otra excepción.
+        """
         if isinstance(exc, porteria.ErrorPorteria):
             return Response(exc.como_respuesta(), status=exc.status)
         return super().handle_exception(exc)
 
     def _datos(self, serializer_class):
+        """Valida el cuerpo de la petición con el serializer indicado.
+
+        Parámetros:
+            serializer_class (type): clase de serializer de entrada.
+
+        Devuelve:
+            dict: los datos validados.
+
+        Lanza:
+            ValidationError: de DRF si los datos no son válidos (responde 400).
+        """
         serializer = serializer_class(data=self.request.data)
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
 
 
 class EntradaView(_VistaPorteria):
+    """POST /api/accesos/entrada: el guarda registra el ingreso de un conductor con su QR."""
+
     @extend_schema(
         tags=['accesos'],
         summary='Registrar entrada con QR',
@@ -224,12 +270,23 @@ class EntradaView(_VistaPorteria):
         ],
     )
     def post(self, request):
+        """Abre el ticket del conductor cuyo QR se leyó.
+
+        Parámetros:
+            request (Request): petición del guarda con ``{'token': ...}``.
+
+        Devuelve:
+            Response: 201 con el ticket abierto. Los errores de portería (400, 404, 409)
+            los responde ``handle_exception``.
+        """
         datos = self._datos(EntradaSerializer)
         ticket = porteria.registrar_entrada(datos['token'], guarda=request.user)
         return Response(TicketSerializer(ticket).data, status=status.HTTP_201_CREATED)
 
 
 class SalidaView(_VistaPorteria):
+    """POST /api/accesos/salida: liquida (sin cerrar) el ticket abierto que va a salir."""
+
     @extend_schema(
         tags=['accesos'],
         summary='Liquidar salida',
@@ -288,6 +345,15 @@ class SalidaView(_VistaPorteria):
         ],
     )
     def post(self, request):
+        """Busca el ticket por QR o por código de invitado y calcula el cobro actual.
+
+        Parámetros:
+            request (Request): petición del guarda con ``token`` o ``codigo_salida``.
+
+        Devuelve:
+            Response: 200 con la liquidación. Los errores de portería (400, 404, 503)
+            los responde ``handle_exception``.
+        """
         datos = self._datos(SalidaSerializer)
         if datos.get('token'):
             ticket = porteria.buscar_ticket_por_qr(datos['token'])
@@ -297,6 +363,8 @@ class SalidaView(_VistaPorteria):
 
 
 class ConfirmarSalidaView(_VistaPorteria):
+    """POST /api/accesos/salida/confirmar: cierra el ticket y registra el pago."""
+
     @extend_schema(
         tags=['accesos'],
         summary='Confirmar salida',
@@ -327,12 +395,23 @@ class ConfirmarSalidaView(_VistaPorteria):
         ],
     )
     def post(self, request):
+        """Cierra el ticket indicado con el cobro recalculado en este momento.
+
+        Parámetros:
+            request (Request): petición del guarda con ``ticket_id`` y ``metodo_pago``.
+
+        Devuelve:
+            Response: 200 con el recibo. Los errores de portería (404, 409, 503) los
+            responde ``handle_exception``.
+        """
         datos = self._datos(ConfirmarSalidaSerializer)
         ticket = porteria.confirmar_salida(datos['ticket_id'], datos['metodo_pago'])
         return Response(ReciboSerializer(ticket).data)
 
 
 class InvitadoView(_VistaPorteria):
+    """POST /api/accesos/invitados: el guarda registra el ingreso de un vehículo sin cuenta."""
+
     @extend_schema(
         tags=['accesos'],
         summary='Registrar invitado',
@@ -371,12 +450,23 @@ class InvitadoView(_VistaPorteria):
         ],
     )
     def post(self, request):
+        """Abre un ticket de invitado con su código de salida.
+
+        Parámetros:
+            request (Request): petición del guarda con ``tipo`` y ``placa``.
+
+        Devuelve:
+            Response: 201 con el ticket de invitado. Los errores de portería (409) los
+            responde ``handle_exception``; una placa inválida responde 400.
+        """
         datos = self._datos(InvitadoSerializer)
         ticket = porteria.registrar_invitado(datos['placa'], datos['tipo'], guarda=request.user)
         return Response(TicketSerializer(ticket).data, status=status.HTTP_201_CREATED)
 
 
 class HistorialView(APIView):
+    """GET /api/accesos/historial: recibos (tickets cerrados) del conductor autenticado."""
+
     permission_classes = [EsConductor]
 
     @extend_schema(
@@ -393,6 +483,14 @@ class HistorialView(APIView):
         examples=[OpenApiExample('Historial', response_only=True, value=[EJEMPLO_RECIBO])],
     )
     def get(self, request):
+        """Lista los tickets cerrados del conductor, del más reciente al más antiguo.
+
+        Parámetros:
+            request (Request): petición autenticada del conductor.
+
+        Devuelve:
+            Response: 200 con la lista de recibos; los tickets abiertos no aparecen.
+        """
         recibos = (
             Ticket.objects.filter(usuario=request.user, hora_salida__isnull=False)
             .select_related('vehiculo', 'tarifa', 'pago')

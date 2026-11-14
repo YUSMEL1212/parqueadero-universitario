@@ -33,20 +33,32 @@ URL_HISTORIAL = '/api/accesos/historial'
 
 
 def crear_guarda(email):
+    """Crea un usuario con rol guarda (y el rol, si no existe).
+
+    Parámetros:
+        email (str): correo del guarda.
+
+    Devuelve:
+        Usuario: el guarda creado.
+    """
     rol, _ = Rol.objects.get_or_create(nombre=Rol.Nombre.GUARDA)
     return Usuario.objects.create_user(email, 'Parqueo.Seguro2026', rol=rol, nombre='Guarda')
 
 
 @override_settings(QR_SECRET_KEY=LLAVE_PRUEBA)
 class PorteriaTestCase(APITestCase):
+    """Base de las pruebas de portería: tarifas, guarda autenticado, conductor y reloj."""
+
     @classmethod
     def setUpTestData(cls):
+        """Carga las tarifas del seed y crea el guarda y a Laura con su carro ABC123."""
         cargar_tarifas_del_seed()
         cls.guarda = crear_guarda('guarda@parqueadero.test')
         cls.laura = crear_conductor('laura@unimonserrate.edu.co')
         cls.carro = Vehiculo.objects.create(usuario=cls.laura, placa='ABC123', tipo='carro')
 
     def setUp(self):
+        """Reemplaza el reloj del QR y de la portería y autentica al guarda."""
         # Un solo reloj para el token QR y para las horas de entrada y salida.
         self.reloj = Reloj(timezone.now().replace(microsecond=0))
         for objetivo in ('accesos.qr.ahora', 'accesos.porteria.ahora'):
@@ -57,16 +69,41 @@ class PorteriaTestCase(APITestCase):
 
     # Atajos: cada llamada genera un QR nuevo, como haría la PWA del conductor.
     def entrar(self, vehiculo):
+        """Registra la entrada de `vehiculo` con un QR recién generado.
+
+        Parámetros:
+            vehiculo (Vehiculo): vehículo de un conductor registrado.
+
+        Devuelve:
+            Response: respuesta de POST /api/accesos/entrada.
+        """
         return self.client.post(
             URL_ENTRADA, {'token': generar_token(vehiculo.usuario, vehiculo)}, format='json'
         )
 
     def liquidar(self, vehiculo):
+        """Pide la liquidación de salida de `vehiculo` con un QR recién generado.
+
+        Parámetros:
+            vehiculo (Vehiculo): vehículo de un conductor registrado.
+
+        Devuelve:
+            Response: respuesta de POST /api/accesos/salida.
+        """
         return self.client.post(
             URL_SALIDA, {'token': generar_token(vehiculo.usuario, vehiculo)}, format='json'
         )
 
     def confirmar(self, ticket_id, **extra):
+        """Confirma la salida de un ticket.
+
+        Parámetros:
+            ticket_id: id del ticket a cerrar.
+            **extra: campos adicionales del cuerpo (p. ej. ``metodo_pago``).
+
+        Devuelve:
+            Response: respuesta de POST /api/accesos/salida/confirmar.
+        """
         return self.client.post(URL_CONFIRMAR, {'ticket_id': ticket_id, **extra}, format='json')
 
 
@@ -74,6 +111,7 @@ class FlujoMensualidadTests(PorteriaTestCase):
     """TDR 1: el conductor con mensualidad activa entra y sale sin pagar."""
 
     def test_ingreso_y_salida_con_mensualidad_cobra_cero(self):
+        """Flujo completo con mensualidad: 9 horas adentro, cobro 0, sin tarifa ni pago creado."""
         crear_mensualidad(self.laura, 'carro', vence_en=self.reloj.momento + timedelta(days=10))
         pagos_antes = Pago.objects.count()
 
@@ -106,6 +144,7 @@ class FlujoMensualidadTests(PorteriaTestCase):
         self.assertEqual(Pago.objects.count(), pagos_antes)  # sin cobro, sin pago
 
     def test_mensualidad_de_moto_no_cubre_el_carro(self):
+        """Con mensualidad solo de moto, el carro paga la fracción hasta_2h."""
         crear_mensualidad(self.laura, 'moto', vence_en=self.reloj.momento + timedelta(days=10))
         self.entrar(self.carro)
         self.reloj.avanzar(30 * 60)
@@ -119,6 +158,7 @@ class FlujoFraccionTests(PorteriaTestCase):
     """TDR 2: sin mensualidad, se cobra la fracción según los minutos."""
 
     def test_ingreso_y_salida_hasta_2h(self):
+        """Flujo completo de 90 minutos pagado con tarjeta: ticket y pago guardan hasta_2h (7000)."""
         ticket_id = self.entrar(self.carro).data['id']
         self.reloj.avanzar(90 * 60)
 
@@ -146,6 +186,7 @@ class FlujoFraccionTests(PorteriaTestCase):
         self.assertEqual(ticket.pago.usuario, self.laura)
 
     def test_ingreso_y_salida_mas_de_2h_en_moto(self):
+        """Moto con 150 minutos paga mas_2h (9000) y, sin indicar método, se registra efectivo."""
         moto = Vehiculo.objects.create(usuario=self.laura, placa='XYZ45K', tipo='moto')
         ticket_id = self.entrar(moto).data['id']
         self.reloj.avanzar(150 * 60)
@@ -157,6 +198,7 @@ class FlujoFraccionTests(PorteriaTestCase):
         self.assertEqual(resp.data['metodo_pago'], 'efectivo')  # método por defecto
 
     def test_la_liquidacion_no_cierra_el_ticket(self):
+        """Liquidar varias veces no cierra el ticket ni crea pagos."""
         ticket_id = self.entrar(self.carro).data['id']
         self.reloj.avanzar(60 * 60)
         self.liquidar(self.carro)
@@ -168,6 +210,7 @@ class FlujoFraccionTests(PorteriaTestCase):
         self.assertFalse(Pago.objects.exists())
 
     def test_la_confirmacion_recalcula_con_la_hora_real(self):
+        """Si entre liquidar (119 min) y confirmar se pasan los 120 minutos, se cobra mas_2h."""
         ticket_id = self.entrar(self.carro).data['id']
         self.reloj.avanzar(119 * 60)
         self.assertEqual(self.liquidar(self.carro).data['valor'], 7000)
@@ -178,6 +221,7 @@ class FlujoFraccionTests(PorteriaTestCase):
         self.assertEqual(resp.data['valor_cobrado'], 12000)
 
     def test_no_se_confirma_dos_veces(self):
+        """Confirmar un ticket ya cerrado responde 409 'ticket_cerrado' y no duplica el pago."""
         ticket_id = self.entrar(self.carro).data['id']
         self.reloj.avanzar(10 * 60)
         self.assertEqual(self.confirmar(ticket_id).status_code, status.HTTP_200_OK)
@@ -188,6 +232,7 @@ class FlujoFraccionTests(PorteriaTestCase):
         self.assertEqual(Pago.objects.count(), 1)
 
     def test_salida_sin_vehiculo_adentro(self):
+        """Liquidar la salida de un conductor sin ticket abierto responde 404 'sin_ticket_abierto'."""
         resp = self.liquidar(self.carro)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(resp.data['codigo'], 'sin_ticket_abierto')
@@ -197,6 +242,7 @@ class FlujoInvitadoTests(PorteriaTestCase):
     """TDR 3: el invitado entra con placa, recibe un código y paga tarifa completa."""
 
     def test_ingreso_de_invitado_y_cobro_completo(self):
+        """Flujo completo de invitado: placa normalizada, código de 8 caracteres y 3 h a mas_2h."""
         resp = self.client.post(URL_INVITADOS, {'tipo': 'carro', 'placa': 'ghj-456'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
         self.assertEqual(resp.data['placa'], 'GHJ456')
@@ -231,6 +277,7 @@ class FlujoInvitadoTests(PorteriaTestCase):
         self.assertEqual(ticket.pago.valor, 12000)
 
     def test_invitado_que_vuelve_reutiliza_el_vehiculo(self):
+        """Un invitado que vuelve tras salir reutiliza el mismo vehículo sin usuario."""
         primero = self.client.post(URL_INVITADOS, {'tipo': 'moto', 'placa': 'KLM12N'}, format='json')
         self.reloj.avanzar(20 * 60)
         self.confirmar(primero.data['id'])
@@ -240,22 +287,26 @@ class FlujoInvitadoTests(PorteriaTestCase):
         self.assertEqual(Vehiculo.objects.filter(placa='KLM12N').count(), 1)
 
     def test_invitado_ya_adentro_es_rechazado(self):
+        """Registrar otra vez una placa de invitado que sigue adentro responde 409 'vehiculo_adentro'."""
         self.client.post(URL_INVITADOS, {'tipo': 'moto', 'placa': 'KLM12N'}, format='json')
         resp = self.client.post(URL_INVITADOS, {'tipo': 'moto', 'placa': 'KLM12N'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data['codigo'], 'vehiculo_adentro')
 
     def test_placa_de_conductor_registrado_no_entra_como_invitado(self):
+        """Una placa de un conductor registrado no puede entrar como invitado (409 'placa_registrada')."""
         resp = self.client.post(URL_INVITADOS, {'tipo': 'carro', 'placa': 'ABC123'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(resp.data['codigo'], 'placa_registrada')
 
     def test_placa_que_no_corresponde_al_tipo(self):
+        """Una placa de carro registrada como moto responde 400 con error en 'placa'."""
         resp = self.client.post(URL_INVITADOS, {'tipo': 'moto', 'placa': 'ABC123'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('placa', resp.data)
 
     def test_codigo_de_salida_inexistente(self):
+        """Un código de salida que no corresponde a ningún invitado adentro responde 404."""
         resp = self.client.post(URL_SALIDA, {'codigo_salida': 'ZZZZZZZZ'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
@@ -264,6 +315,7 @@ class SegundoVehiculoTests(PorteriaTestCase):
     """TDR 4: un conductor no puede tener dos vehículos adentro a la vez."""
 
     def test_rechaza_el_segundo_vehiculo_simultaneo(self):
+        """Con el carro adentro, la moto del mismo conductor se rechaza (409) indicando la placa."""
         moto = Vehiculo.objects.create(usuario=self.laura, placa='XYZ45K', tipo='moto')
         self.assertEqual(self.entrar(self.carro).status_code, status.HTTP_201_CREATED)
 
@@ -274,10 +326,12 @@ class SegundoVehiculoTests(PorteriaTestCase):
         self.assertEqual(Ticket.objects.filter(usuario=self.laura).count(), 1)
 
     def test_el_mismo_vehiculo_no_entra_dos_veces(self):
+        """El mismo vehículo no puede entrar de nuevo sin haber salido (409)."""
         self.entrar(self.carro)
         self.assertEqual(self.entrar(self.carro).status_code, status.HTTP_409_CONFLICT)
 
     def test_tras_salir_puede_entrar_con_otro_vehiculo(self):
+        """Después de cerrar la salida, el conductor puede entrar con otro vehículo."""
         moto = Vehiculo.objects.create(usuario=self.laura, placa='XYZ45K', tipo='moto')
         ticket_id = self.entrar(self.carro).data['id']
         self.reloj.avanzar(15 * 60)
@@ -286,6 +340,7 @@ class SegundoVehiculoTests(PorteriaTestCase):
         self.assertEqual(self.entrar(moto).status_code, status.HTTP_201_CREATED)
 
     def test_otro_conductor_si_puede_entrar(self):
+        """La restricción es por conductor: otro conductor entra aunque Laura esté adentro."""
         pedro = crear_conductor('pedro@unimonserrate.edu.co')
         carro_pedro = Vehiculo.objects.create(usuario=pedro, placa='DEF456', tipo='carro')
         self.entrar(self.carro)
@@ -293,7 +348,10 @@ class SegundoVehiculoTests(PorteriaTestCase):
 
 
 class QREnPorteriaTests(PorteriaTestCase):
+    """Errores del QR al pasar por la portería y validación del cuerpo de salida."""
+
     def test_qr_vencido_es_rechazado(self):
+        """Un QR de hace 61 segundos se rechaza con 400 'qr_vencido' y no abre ticket."""
         token = generar_token(self.laura, self.carro)
         self.reloj.avanzar(61)
         resp = self.client.post(URL_ENTRADA, {'token': token}, format='json')
@@ -302,6 +360,7 @@ class QREnPorteriaTests(PorteriaTestCase):
         self.assertFalse(Ticket.objects.exists())
 
     def test_qr_alterado_es_rechazado(self):
+        """Un QR con un byte cambiado se rechaza con 400 'qr_alterado'."""
         crudo = bytearray(b64_a_bytes(generar_token(self.laura, self.carro)))
         crudo[20] ^= 0x01
         resp = self.client.post(URL_ENTRADA, {'token': bytes_a_b64(bytes(crudo))}, format='json')
@@ -309,6 +368,7 @@ class QREnPorteriaTests(PorteriaTestCase):
         self.assertEqual(resp.data['codigo'], 'qr_alterado')
 
     def test_salida_pide_token_o_codigo(self):
+        """Pedir la salida sin token ni código de invitado responde 400."""
         self.assertEqual(
             self.client.post(URL_SALIDA, {}, format='json').status_code,
             status.HTTP_400_BAD_REQUEST,
@@ -316,7 +376,10 @@ class QREnPorteriaTests(PorteriaTestCase):
 
 
 class PermisosPorteriaTests(PorteriaTestCase):
+    """Solo el guarda autenticado puede usar los endpoints de portería."""
+
     def test_solo_el_guarda_usa_la_porteria(self):
+        """Un conductor recibe 403 en entrada, salida, confirmación e invitados, sin abrir tickets."""
         self.client.force_authenticate(self.laura)
         token = generar_token(self.laura, self.carro)
         for url, datos in [
@@ -331,13 +394,17 @@ class PermisosPorteriaTests(PorteriaTestCase):
         self.assertFalse(Ticket.objects.exists())
 
     def test_sin_autenticar_responde_401(self):
+        """Sin autenticación, la entrada responde 401."""
         self.client.force_authenticate(None)
         resp = self.client.post(URL_ENTRADA, {'token': 'x'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class HistorialTests(PorteriaTestCase):
+    """GET /api/accesos/historial: recibos cerrados del conductor autenticado."""
+
     def test_conductor_ve_solo_sus_recibos_cerrados(self):
+        """El historial trae solo los tickets cerrados propios, del más reciente al más antiguo."""
         pedro = crear_conductor('pedro@unimonserrate.edu.co')
         carro_pedro = Vehiculo.objects.create(usuario=pedro, placa='DEF456', tipo='carro')
 
@@ -364,4 +431,5 @@ class HistorialTests(PorteriaTestCase):
         self.assertIsNotNone(recibo['hora_salida'])
 
     def test_el_guarda_no_tiene_historial(self):
+        """El guarda no es conductor: el historial le responde 403."""
         self.assertEqual(self.client.get(URL_HISTORIAL).status_code, status.HTTP_403_FORBIDDEN)
