@@ -41,6 +41,11 @@ IOT_DEVICE_KEY = config('IOT_DEVICE_KEY', default='')
 # Confianza mínima (0 a 1) para aceptar una lectura de placa de la cámara LPR.
 LPR_CONFIANZA_MINIMA = config('LPR_CONFIANZA_MINIMA', default=0.80, cast=float)
 
+# Orígenes del frontend (PWA) que pueden llamar a la API desde el navegador.
+# Lista separada por comas, con esquema y puerto, sin barra final.
+# Ej.: CORS_ALLOWED_ORIGINS=http://localhost:5173,https://parqueadero.example.com
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
+
 
 # Application definition
 
@@ -58,6 +63,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'drf_spectacular',
     'channels',
+    'corsheaders',
     # Apps del proyecto
     'usuarios',
     'vehiculos',
@@ -69,6 +75,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # CORS va antes de CommonMiddleware para responder también las peticiones preflight.
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

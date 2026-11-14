@@ -167,3 +167,27 @@ class PermisosPorRolTests(APITestCase):
         resp = self.client.get(SOLO_ADMIN)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+@override_settings(CORS_ALLOWED_ORIGINS=['http://localhost:5173'])
+class CorsTests(APITestCase):
+    """El frontend (PWA) llama a la API desde otro origen."""
+
+    def test_preflight_desde_origen_permitido(self):
+        res = self.client.options(
+            LOGIN,
+            HTTP_ORIGIN='http://localhost:5173',
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS='authorization,content-type',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res['Access-Control-Allow-Origin'], 'http://localhost:5173')
+        self.assertIn('authorization', res['Access-Control-Allow-Headers'])
+
+    def test_origen_no_permitido_no_recibe_cabecera(self):
+        res = self.client.post(
+            LOGIN,
+            {'email': 'x@x.co', 'password': 'x'},
+            HTTP_ORIGIN='http://sitio-ajeno.example',
+        )
+        self.assertNotIn('Access-Control-Allow-Origin', res)
