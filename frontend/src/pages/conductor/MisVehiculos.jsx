@@ -13,6 +13,7 @@ import api from '../../api/client';
 import { leerError } from '../../api/errores';
 import Aviso from '../../components/Aviso';
 import Campo from '../../components/Campo';
+import SelectorTipo from '../../components/SelectorTipo';
 import useConsulta from '../../hooks/useConsulta';
 import { NOMBRE_TIPO, ejemploPlaca, errorDePlaca, formatearPlaca, normalizarPlaca } from './vehiculos';
 
@@ -156,28 +157,6 @@ function ListaVehiculos({ consulta, vehiculos }) {
 }
 
 // ---- Formulario --------------------------------------------------------------------
-
-function SelectorTipo({ valor, onCambiar, disabled }) {
-  return (
-    <fieldset className="segmentos" disabled={disabled}>
-      <legend className="campo__etiqueta">Tipo de vehículo</legend>
-      <div className="segmentos__opciones">
-        {Object.entries(NOMBRE_TIPO).map(([tipo, texto]) => (
-          <label key={tipo} className="segmentos__opcion">
-            <input
-              type="radio"
-              name="tipo"
-              value={tipo}
-              checked={valor === tipo}
-              onChange={() => onCambiar(tipo)}
-            />
-            <span>{texto}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
 
 function FormularioVehiculo({ onAgregado }) {
   const [tipo, setTipo] = useState('carro');

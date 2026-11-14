@@ -1,5 +1,6 @@
 /**
- * Utilidades de vehículos y placas compartidas por las pantallas del conductor.
+ * Utilidades de vehículos y placas compartidas por las pantallas del conductor y de
+ * portería (registro de invitados).
  *
  * Mismas reglas que el backend (vehiculos/models.py): carro ABC123, moto ABC12D, sin
  * guion ni espacios y en mayúsculas. El backend vuelve a validar; esto solo evita

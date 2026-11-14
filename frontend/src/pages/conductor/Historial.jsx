@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 
 import { leerError } from '../../api/errores';
 import useConsulta from '../../hooks/useConsulta';
+import { formatearDuracion, formatoFecha, formatoHora, formatoPesos, horaConDia } from '../../utils/formato';
 import { RUTA_INICIO_CONDUCTOR } from './rutas';
 import { NOMBRE_TIPO, formatearPlaca } from './vehiculos';
 
@@ -31,16 +32,6 @@ const VACIO_FILTRO = {
   mensualidad: 'No tienes recibos cubiertos por mensualidad.',
 };
 
-const formatoPesos = new Intl.NumberFormat('es-CO', {
-  style: 'currency',
-  currency: 'COP',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-const formatoFecha = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
-const formatoHora = new Intl.DateTimeFormat('es-CO', { hour: 'numeric', minute: '2-digit' });
-const formatoDiaCorto = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short' });
-
 function motivoDe(recibo) {
   return recibo.tarifa ? recibo.tarifa.concepto : 'mensualidad_activa';
 }
@@ -49,28 +40,13 @@ function categoriaDe(recibo) {
   return motivoDe(recibo) === 'mensualidad_activa' ? 'mensualidad' : 'fraccion';
 }
 
-/** 45 → "45 min"; 90 → "1 h 30 min"; 120 → "2 h". */
-function formatearDuracion(minutos) {
-  const total = Math.max(0, Number(minutos) || 0);
-  const horas = Math.floor(total / 60);
-  const resto = total % 60;
-  if (!horas) return `${resto} min`;
-  return resto ? `${horas} h ${resto} min` : `${horas} h`;
-}
-
-function mismoDia(a, b) {
-  return a.toDateString() === b.toDateString();
-}
-
 function Recibo({ recibo }) {
   const entrada = new Date(recibo.hora_entrada);
   const salida = new Date(recibo.hora_salida);
   const motivo = motivoDe(recibo);
   const conMensualidad = motivo === 'mensualidad_activa';
   // Si salió otro día, la hora de salida lleva su fecha.
-  const textoSalida = mismoDia(entrada, salida)
-    ? formatoHora.format(salida)
-    : `${formatoDiaCorto.format(salida)}, ${formatoHora.format(salida)}`;
+  const textoSalida = horaConDia(salida, entrada);
 
   return (
     <li>

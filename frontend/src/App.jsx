@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
 
 import { ROLES } from './auth/roles';
@@ -17,7 +18,20 @@ import {
   RUTA_PAGAR_MENSUALIDAD,
   RUTA_VEHICULOS,
 } from './pages/conductor/rutas';
-import InicioPorteria from './pages/porteria/InicioPorteria';
+import Cobros from './pages/porteria/Cobros';
+import Invitados from './pages/porteria/Invitados';
+import LayoutPorteria from './pages/porteria/LayoutPorteria';
+import { RUTA_COBROS, RUTA_INVITADOS, RUTA_LECTOR } from './pages/porteria/rutas';
+
+// El lector trae html5-qrcode (~400 kB): se descarga solo cuando un guarda lo abre.
+const Lector = lazy(() => import('./pages/porteria/Lector'));
+
+const cargandoLector = (
+  <div className="vacio" role="status">
+    <span className="spinner" aria-hidden="true" />
+    <span className="texto-suave">Cargando el lector…</span>
+  </div>
+);
 
 export default function App() {
   return (
@@ -48,7 +62,19 @@ export default function App() {
 
       <Route element={<RutaProtegida roles={[ROLES.GUARDA]} />}>
         <Route element={<ZonaLayout />}>
-          <Route path="/porteria" element={<InicioPorteria />} />
+          {/* El guarda solo tiene estas tres pantallas; cualquier otra ruta lo trae aquí. */}
+          <Route element={<LayoutPorteria />}>
+            <Route
+              path={RUTA_LECTOR}
+              element={
+                <Suspense fallback={cargandoLector}>
+                  <Lector />
+                </Suspense>
+              }
+            />
+            <Route path={RUTA_INVITADOS} element={<Invitados />} />
+            <Route path={RUTA_COBROS} element={<Cobros />} />
+          </Route>
         </Route>
       </Route>
 
