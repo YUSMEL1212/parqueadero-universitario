@@ -56,6 +56,7 @@ WOMPI_INTEGRITY_SECRET = config('WOMPI_INTEGRITY_SECRET', default='')
 # Lista separada por comas, con esquema y puerto, sin barra final.
 # Ej.: CORS_ALLOWED_ORIGINS=http://localhost:5173,https://parqueadero.example.com
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
 
 # Application definition
@@ -86,6 +87,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     # CORS va antes de CommonMiddleware para responder también las peticiones preflight.
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
